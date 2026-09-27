@@ -133,6 +133,50 @@ std::vector<uint8_t> YSMParserV3::getDecryptedData()
 	return pngBytes;
 }
 
+inline std::string GetAnimationModelName(uint32_t modelId, bool isNewVersion) {
+	static const char* const kModelNamesNew[] = {
+		"unknown",            // 0
+		"main",               // 1
+		"arm",                // 2
+		"extra",              // 3
+		"tac",                // 4
+		"arrow",              // 5
+		"carryon",            // 6
+		"parcool",            // 7
+		"swem",               // 8
+		"slashblade",         // 9
+		"tlm",                // 10
+		"fp.arm",             // 11
+		"immersive_melodies", // 12
+		"iss"                 // 13
+	};
+
+	static const char* const kModelNamesOld[] = {
+		"unknown",            // 0
+		"main",               // 1
+		"arm",                // 2
+		"extra",              // 3
+		"tac",                // 4
+		"arrow",              // 5
+		"carryon",            // 6
+		"parcool",            // 7
+		"swem",               // 8
+		"slashblade",         // 9
+		"tlm",                // 10
+		"fp_arm",             // 11
+		"immersive_melodies", // 12
+		"irons_spell_books"   // 13
+	};
+
+	constexpr uint32_t kKnownModelCount = sizeof(kModelNamesNew) / sizeof(kModelNamesNew[0]);
+
+	if (modelId > 0 && modelId < kKnownModelCount) {
+		return isNewVersion ? kModelNamesNew[modelId] : kModelNamesOld[modelId];
+	}
+
+	return "unk_" + std::to_string(modelId);
+}
+
 
 static int extractFormatFromHeader(const std::string& headerData) {
 	size_t pos = headerData.find("<format>");
@@ -807,7 +851,8 @@ std::vector<uint8_t> YSMParserV3::ParseModels(BufferReader& reader)
 		printf("bone offset++ : 0x%08zX\n", reader.offset);
 
 		// TODO: 5 unknown bytes.
-		if (reader.readVarint() != 0) throw ParserUnknownField();
+		//if (reader.readVarint() != 0) throw ParserUnknownField();
+		reader.readVarint();
 		if (reader.readVarint() != 0) throw ParserUnknownField();
 		if (reader.readVarint() != 0) throw ParserUnknownField();
 		if (reader.readVarint() != 0) throw ParserUnknownField();
@@ -935,11 +980,11 @@ std::vector<uint8_t> YSMParserV3::ParseModels(BufferReader& reader)
 	std::string result;
 	if (this->isFormatJson())
 	{
-		result = final_output.dump(4, ' ', false);
+		result = final_output.dump(4, ' ', false, json::error_handler_t::replace);
 	}
 	else
 	{
-		result = final_output.dump(-1);
+		result = final_output.dump(-1, ' ', false, json::error_handler_t::replace);
 	}
 	std::vector<uint8_t> data(result.begin(), result.end());
 
@@ -1195,11 +1240,11 @@ void YSMParserV3::ParseYSMJson(BufferReader& reader)
 	std::string result;
 	if (this->isFormatJson())
 	{
-		result = root.dump(4, ' ', false);
+		result = root.dump(4, ' ', false, json::error_handler_t::replace);
 	}
 	else
 	{
-		result = root.dump(-1);
+		result = root.dump(-1, ' ', false, json::error_handler_t::replace);
 	}
 
 	std::vector<uint8_t> data(result.begin(), result.end());
@@ -1448,11 +1493,11 @@ void YSMParserV3::ParseLegacyYSMInfo(BufferReader& reader)
 	std::string result;
 	if (this->isFormatJson())
 	{
-		result = j.dump(4, ' ', false);
+		result = j.dump(4, ' ', false, json::error_handler_t::replace);
 	}
 	else
 	{
-		result = j.dump(-1);
+		result = j.dump(-1, ' ', false, json::error_handler_t::replace);
 	}
 
 	m_infoJsonFile.assign(result.begin(), result.end());
@@ -1780,11 +1825,11 @@ std::vector<uint8_t> YSMParserV3::ParseAnimations(BufferReader& reader)
 	std::string result;
 	if (this->isFormatJson())
 	{
-		result = root.dump(4, ' ', false);
+		result = root.dump(4, ' ', false, json::error_handler_t::replace);
 	}
 	else
 	{
-		result = root.dump(-1);
+		result = root.dump(-1, ' ', false, json::error_handler_t::replace);
 	}
 
 	std::vector<uint8_t> animData(result.begin(), result.end());
@@ -1847,11 +1892,11 @@ void YSMParserV3::ParseLanguageFiles(BufferReader& reader)
 		std::string result;
 		if (this->isFormatJson())
 		{
-			result = nodesData.dump(4, ' ', false);
+			result = nodesData.dump(4, ' ', false, json::error_handler_t::replace);
 		}
 		else
 		{
-			result = nodesData.dump(-1);
+			result = nodesData.dump(-1, ' ', false, json::error_handler_t::replace);
 		}
 		std::vector<uint8_t> data(result.begin(), result.end());
 		m_languageFiles.push_back({ name ,data });
@@ -2081,11 +2126,11 @@ std::vector<uint8_t> YSMParserV3::ParseAnimationControllers(BufferReader& reader
 	std::string result;
 	if (this->isFormatJson())
 	{
-		result = root.dump(4, ' ', false);
+		result = root.dump(4, ' ', false, json::error_handler_t::replace);
 	}
 	else
 	{
-		result = root.dump(-1);
+		result = root.dump(-1, ' ', false, json::error_handler_t::replace);
 	}
 	std::vector<uint8_t> data(result.begin(), result.end());
 
@@ -2174,20 +2219,7 @@ void YSMParserV3::deserializeLegacyV1(BufferReader& reader) {
 		animIds.push_back(modelId);
 		reader.readVarint();
 		auto anim = ParseAnimations(reader);
-		if (modelId == 1) m_animationFiles.push_back({ "main", anim });
-		else if (modelId == 2) m_animationFiles.push_back({ "arm", anim });
-		else if (modelId == 3) m_animationFiles.push_back({ "extra", anim });
-		else if (modelId == 4) m_animationFiles.push_back({ "tac", anim });
-		else if (modelId == 5) m_animationFiles.push_back({ "arrow", anim });
-		else if (modelId == 6) m_animationFiles.push_back({ "carryon", anim });
-		else if (modelId == 7) m_animationFiles.push_back({ "parcool", anim });
-		else if (modelId == 8) m_animationFiles.push_back({ "swem", anim });
-		else if (modelId == 9) m_animationFiles.push_back({ "slashblade", anim });
-		else if (modelId == 10) m_animationFiles.push_back({ "tlm", anim });
-		else if (modelId == 11) m_animationFiles.push_back({ "fp.arm", anim });
-		else if (modelId == 12) m_animationFiles.push_back({ "immersive_melodies", anim });
-		else if (modelId == 13) m_animationFiles.push_back({ "iss", anim }); // irons_spell_books
-		else throw ParserUnknownField();
+		m_animationFiles.push_back({ GetAnimationModelName(modelId, false), anim });
 	}
 
 
@@ -2294,20 +2326,7 @@ void YSMParserV3::deserializeLegacyV15(BufferReader& reader) {
 		animIds.push_back(modelId);
 		reader.readVarint();
 		auto anim = ParseAnimations(reader);
-		if (modelId == 1) m_animationFiles.push_back({ "main", anim });
-		else if (modelId == 2) m_animationFiles.push_back({ "arm", anim });
-		else if (modelId == 3) m_animationFiles.push_back({ "extra", anim });
-		else if (modelId == 4) m_animationFiles.push_back({ "tac", anim });
-		else if (modelId == 5) m_animationFiles.push_back({ "arrow", anim });
-		else if (modelId == 6) m_animationFiles.push_back({ "carryon", anim });
-		else if (modelId == 7) m_animationFiles.push_back({ "parcool", anim });
-		else if (modelId == 8) m_animationFiles.push_back({ "swem", anim });
-		else if (modelId == 9) m_animationFiles.push_back({ "slashblade", anim });
-		else if (modelId == 10) m_animationFiles.push_back({ "tlm", anim });
-		else if (modelId == 11) m_animationFiles.push_back({ "fp_arm", anim });
-		else if (modelId == 12) m_animationFiles.push_back({ "immersive_melodies", anim });
-		else if (modelId == 13) m_animationFiles.push_back({ "irons_spell_books", anim });
-		else throw ParserUnknownField();
+		m_animationFiles.push_back({ GetAnimationModelName(modelId, false), anim });
 	}
 
 	if (m_format > 9) {
@@ -2633,20 +2652,7 @@ void YSMParserV3::deserializeModern(BufferReader& reader) {
 	{
 		uint32_t modelId = reader.readVarint();
 		auto anim = ParseAnimations(reader);
-		if (modelId == 1) m_animationFiles.push_back({ "main", anim });
-		else if (modelId == 2) m_animationFiles.push_back({ "arm", anim });
-		else if (modelId == 3) m_animationFiles.push_back({ "extra", anim });
-		else if (modelId == 4) m_animationFiles.push_back({ "tac", anim });
-		else if (modelId == 5) m_animationFiles.push_back({ "arrow", anim });
-		else if (modelId == 6) m_animationFiles.push_back({ "carryon", anim });
-		else if (modelId == 7) m_animationFiles.push_back({ "parcool", anim });
-		else if (modelId == 8) m_animationFiles.push_back({ "swem", anim });
-		else if (modelId == 9) m_animationFiles.push_back({ "slashblade", anim });
-		else if (modelId == 10) m_animationFiles.push_back({ "tlm", anim });
-		else if (modelId == 11) m_animationFiles.push_back({ "fp.arm", anim });
-		else if (modelId == 12) m_animationFiles.push_back({ "immersive_melodies", anim });
-		else if (modelId == 13) m_animationFiles.push_back({ "iss", anim }); // irons_spell_books
-		else throw ParserUnknownField();
+		m_animationFiles.push_back({ GetAnimationModelName(modelId, true), anim });
 	}
 
 	// animations-controller
@@ -2896,3 +2902,4 @@ void YSMParserV3::saveToDirectory(std::string output_directory)
 		saveFile(outPath, item.second);
 	}
 }
+
